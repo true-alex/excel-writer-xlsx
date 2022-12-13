@@ -448,7 +448,7 @@ sub add_chart {
     );
 
 
-    my $chart = Excel::Writer::XLSX::Chart->factory( $type, $arg{subtype}, excel_version => $arg{excel_version} );
+    my $chart = Excel::Writer::XLSX::Chart->factory( $type, $arg{subtype}, excel_version => $arg{excel_version}, lang => $arg{lang} );
 
     # If the chart isn't embedded let the workbook control it.
     if ( !$embedded ) {

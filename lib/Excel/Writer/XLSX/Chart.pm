@@ -123,6 +123,7 @@ sub new {
     $self->{_external_data_id}  = undef;
 
     $self->{_excel_version}     = $arg{excel_version} || 2007;
+    $self->{_lang}              = $arg{lang} || 'en-US';
 
     bless $self, $class;
     $self->_set_default_properties();
@@ -146,7 +147,7 @@ sub _assemble_xml_file {
     $self->_write_chart_space();
 
     # Write the c:lang element.
-    $self->_write_lang();
+    $self->_write_lang($self->{_lang});
 
     # Write the c:roundedCorners element.
     $self->_write_rounded_corners();
@@ -2467,7 +2468,9 @@ sub _write_chart_space {
 sub _write_lang {
 
     my $self = shift;
-    my $val  = 'en-US';
+    my $val  = shift;
+
+    $val ||= 'en-US';
 
     my @attributes = ( 'val' => $val );
 
