@@ -4018,7 +4018,7 @@ sub conditional_formatting {
     # List of valid input parameters.
     my %valid_parameter = (
         type                           => 1,
-        format                         => 1,
+        'format'                       => 1,
         criteria                       => 1,
         value                          => 1,
         minimum                        => 1,
@@ -4687,6 +4687,7 @@ sub add_table {
         name           => 1,
         style          => 1,
         total_row      => 1,
+        'format'       => 1,
     );
 
     # Check for valid input parameters.
@@ -4719,6 +4720,10 @@ sub add_table {
     $table{_header_row_count} = $param->{header_row}     ? 1 : 0;
     $table{_totals_row_shown} = $param->{total_row}      ? 1 : 0;
 
+    # Setting the format for a table
+    if ( defined $param->{format} && ref $param->{format} ) {
+        $table{_format} = $param->{format}->get_dxf_index();
+    }
 
     # Set the table name.
     if ( defined $param->{name} ) {
@@ -5992,7 +5997,7 @@ sub insert_chart {
 
     # Ensure a chart isn't inserted more than once.
     if (   $chart->{_already_inserted}
-        || $chart->{_combined} && $chart->{_combined}->{_already_inserted} )
+        || $chart->{_combined} && @{$chart->{_combined}} && scalar(grep {$_->{_already_inserted}} @{$chart->{_combined}}) )
     {
         carp "Chart cannot be inserted in a worksheet more than once";
         return;
@@ -6000,9 +6005,12 @@ sub insert_chart {
     else {
         $chart->{_already_inserted} = 1;
 
-        if ( $chart->{_combined} ) {
-            $chart->{_combined}->{_already_inserted} = 1;
+        if ( $chart->{_combined} && @{$chart->{_combined}} ) {
+            foreach ( @{$chart->{_combined}} ) {
+                $_->{_already_inserted} = 1;
+            }
         }
+
     }
 
     # Use the values set with $chart->set_size(), if any.
