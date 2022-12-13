@@ -104,6 +104,9 @@ sub _write_stock_chart {
 
     $self->xml_start_tag( 'c:stockChart' );
 
+    # Write the c:varyColors element.
+    $self->_write_vary_colors($self->{_vary_colors});
+
     # Write the series elements.
     $self->_write_ser( $_ ) for @series;
 

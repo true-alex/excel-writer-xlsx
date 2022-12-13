@@ -99,6 +99,9 @@ sub _write_radar_chart {
     # Write the c:radarStyle element.
     $self->_write_radar_style();
 
+    # Write the c:varyColors element.
+    $self->_write_vary_colors($self->{_vary_colors});
+
     # Write the series elements.
     $self->_write_series( $_ ) for @series;
 

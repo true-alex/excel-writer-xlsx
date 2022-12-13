@@ -35,9 +35,7 @@ sub new {
     my $class = shift;
     my $self  = Excel::Writer::XLSX::Chart::Pie->new( @_ );
 
-    $self->{_vary_data_color} = 1;
     $self->{_hole_size}       = 50;
-    $self->{_rotation}        = 0;
 
     bless $self, $class;
     return $self;
@@ -95,7 +93,7 @@ sub _write_doughnut_chart {
     $self->xml_start_tag( 'c:doughnutChart' );
 
     # Write the c:varyColors element.
-    $self->_write_vary_colors();
+    $self->_write_vary_colors($self->{_vary_colors});
 
     # Write the series elements.
     $self->_write_ser( $_ ) for @{ $self->{_series} };

@@ -100,6 +100,9 @@ sub _write_area_chart {
     # Write the c:grouping element.
     $self->_write_grouping( $subtype );
 
+    # Write the c:varyColors element.
+    $self->_write_vary_colors($self->{_vary_colors});
+
     # Write the series elements.
     $self->_write_series( $_ ) for @series;
 

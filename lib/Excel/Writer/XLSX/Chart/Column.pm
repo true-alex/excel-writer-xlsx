@@ -114,6 +114,9 @@ sub _write_bar_chart {
     # Write the c:grouping element.
     $self->_write_grouping( $subtype );
 
+    # Write the c:varyColors element.
+    $self->_write_vary_colors($self->{_vary_colors});
+
     # Write the c:ser elements.
     $self->_write_ser( $_ ) for @series;
 

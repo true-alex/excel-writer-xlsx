@@ -116,6 +116,7 @@ sub new {
     $self->{_combined}          = [];
     $self->{_is_secondary}      = 0;
     $self->{_rounded_corners}   = 0;
+    $self->{_vary_colors}       = 0;
 
     $self->{_label_positions}          = {};
     $self->{_label_position_default}   = '';
@@ -2815,6 +2816,25 @@ sub _write_manual_layout {
 sub _write_chart_type {
 
     my $self = shift;
+}
+
+
+##############################################################################
+#
+# _write_vary_colors()
+#
+# Write the <c:varyColors> element.
+#
+sub _write_vary_colors {
+
+    my $self = shift;
+    my $val  = shift;
+
+    return if $val == 0 && $self->{_excel_version} == 2007;
+
+    my @attributes = ( 'val' => $val );
+
+    $self->xml_empty_tag( 'c:varyColors', @attributes );
 }
 
 

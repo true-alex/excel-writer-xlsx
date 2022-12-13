@@ -35,9 +35,9 @@ sub new {
     my $class = shift;
     my $self  = Excel::Writer::XLSX::Chart->new( @_ );
 
-    $self->{_vary_data_color} = 1;
     $self->{_rotation}        = 0;
     $self->{_explosion_allowed} = 1;
+    $self->{_vary_colors}     = 1;
 
     # Set the available data label positions for this chart type.
     $self->{_label_position_default} = 'best_fit';
@@ -126,7 +126,7 @@ sub _write_pie_chart {
     $self->xml_start_tag( 'c:pieChart' );
 
     # Write the c:varyColors element.
-    $self->_write_vary_colors();
+    $self->_write_vary_colors($self->{_vary_colors});
 
     # Write the series elements.
     $self->_write_ser( $_ ) for @{ $self->{_series} };
@@ -333,23 +333,6 @@ sub _write_a_p_pr_legend {
     $self->_write_a_def_rpr( $font );
 
     $self->xml_end_tag( 'a:pPr' );
-}
-
-
-##############################################################################
-#
-# _write_vary_colors()
-#
-# Write the <c:varyColors> element.
-#
-sub _write_vary_colors {
-
-    my $self = shift;
-    my $val  = 1;
-
-    my @attributes = ( 'val' => $val );
-
-    $self->xml_empty_tag( 'c:varyColors', @attributes );
 }
 
 
