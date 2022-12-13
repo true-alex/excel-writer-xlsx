@@ -34,7 +34,7 @@ use Excel::Writer::XLSX::Package::XMLwriter;
 use Excel::Writer::XLSX::Utility qw(xl_cell_to_rowcol xl_rowcol_to_cell);
 
 our @ISA     = qw(Excel::Writer::XLSX::Package::XMLwriter);
-our $VERSION = '1.09';
+our $VERSION = '1.10';
 
 
 ###############################################################################
@@ -448,7 +448,7 @@ sub add_chart {
     );
 
 
-    my $chart = Excel::Writer::XLSX::Chart->factory( $type, $arg{subtype} );
+    my $chart = Excel::Writer::XLSX::Chart->factory( $type, $arg{subtype}, excel_version => $arg{excel_version} );
 
     # If the chart isn't embedded let the workbook control it.
     if ( !$embedded ) {
@@ -2072,7 +2072,7 @@ sub _add_chart_data {
         push @charts, $chart;
 
         if ($chart->{_combined}) {
-            push @charts, $chart->{_combined};
+            push @charts, @{$chart->{_combined}};
         }
     }
 

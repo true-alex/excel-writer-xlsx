@@ -27,7 +27,7 @@ use Excel::Writer::XLSX::Utility qw(xl_cell_to_rowcol
   quote_sheetname );
 
 our @ISA     = qw(Excel::Writer::XLSX::Package::XMLwriter);
-our $VERSION = '1.09';
+our $VERSION = '1.10';
 
 
 ###############################################################################
@@ -52,6 +52,7 @@ sub factory {
 
     my $fh = undef;
     return $module->new( $fh, @_ );
+
 }
 
 
@@ -68,12 +69,15 @@ sub new {
     my $self  = Excel::Writer::XLSX::Package::XMLwriter->new( $fh );
 
     $self->{_subtype}           = shift;
+    my %arg   = @_;
+
     $self->{_sheet_type}        = 0x0200;
     $self->{_orientation}       = 0x0;
     $self->{_series}            = [];
     $self->{_embedded}          = 0;
     $self->{_id}                = -1;
     $self->{_series_index}      = 0;
+    $self->{_series_index_ref}  = \$self->{_series_index};
     $self->{_style_id}          = 2;
     $self->{_axis_ids}          = [];
     $self->{_axis2_ids}         = [];
@@ -95,6 +99,7 @@ sub new {
     $self->{_x2_axis}           = {};
     $self->{_chart_name}        = '';
     $self->{_show_blanks}       = 'gap';
+    $self->{_show_dlbls_over_max} = 0;
     $self->{_show_hidden_data}  = 0;
     $self->{_show_crosses}      = 1;
     $self->{_width}             = 480;
@@ -108,11 +113,16 @@ sub new {
     $self->{_cross_between}     = 'between';
     $self->{_date_category}     = 0;
     $self->{_already_inserted}  = 0;
-    $self->{_combined}          = undef;
+    $self->{_combined}          = [];
     $self->{_is_secondary}      = 0;
+    $self->{_rounded_corners}   = 0;
 
     $self->{_label_positions}          = {};
     $self->{_label_position_default}   = '';
+
+    $self->{_external_data_id}  = undef;
+
+    $self->{_excel_version}     = $arg{excel_version} || 2007;
 
     bless $self, $class;
     $self->_set_default_properties();
@@ -138,6 +148,9 @@ sub _assemble_xml_file {
     # Write the c:lang element.
     $self->_write_lang();
 
+    # Write the c:roundedCorners element.
+    $self->_write_rounded_corners();
+
     # Write the c:style element.
     $self->_write_style();
 
@@ -152,6 +165,9 @@ sub _assemble_xml_file {
 
     # Write the c:printSettings element.
     $self->_write_print_settings() if $self->{_embedded};
+
+    # Write the externalData element
+    $self->_write_external_data() if $self->{_external_data_id};
 
     # Close the worksheet tag.
     $self->xml_end_tag( 'c:chartSpace' );
@@ -318,6 +334,37 @@ sub add_series {
 
 ###############################################################################
 #
+# set_rounded_corners()
+#
+# Set the properties corner rounding.
+#
+sub set_rounded_corners {
+
+    my $self = shift;
+
+    my $roundedCorners = defined $_[0] ? $_[0] : 1;
+
+    $self->{_rounded_corners} = $roundedCorners;
+}
+
+
+###############################################################################
+#
+# set_rounded_corners()
+#
+# Set the properties external data id.
+#
+sub set_external_data_id {
+    my $self = shift;
+
+    my $externalDataId = $_[0];
+
+    $self->{_external_data_id} = $externalDataId;
+}
+
+
+###############################################################################
+#
 # set_x_axis()
 #
 # Set the properties of the X-axis.
@@ -475,6 +522,21 @@ sub set_style {
     }
 
     $self->{_style_id} = $style_id;
+}
+
+
+###############################################################################
+#
+# show_blanks_as()
+#
+# Set the option for displaying blank data in a chart. The default is 'gap'.
+#
+sub show_dlbls_over_max {
+
+    my $self   = shift;
+    my $option = shift;
+
+    $self->{_show_dlbls_over_max} = $option ? 1 : 0;
 }
 
 
@@ -658,7 +720,7 @@ sub combine {
     my $self  = shift;
     my $chart = shift;
 
-    $self->{_combined} = $chart;
+    push @{$self->{_combined}}, $chart;
 }
 
 
@@ -780,8 +842,8 @@ sub _convert_axis_args {
     $axis->{_fill} = $self->_get_fill_properties( $arg{fill} );
 
     # Set the tick marker types.
-    $axis->{_minor_tick_mark} = $self->_get_tick_type($arg{minor_tick_mark});
-    $axis->{_major_tick_mark} = $self->_get_tick_type($arg{major_tick_mark});
+    $axis->{_minor_tick_mark} = $self->_get_tick_type($arg{minor_tick_mark},'none');
+    $axis->{_major_tick_mark} = $self->_get_tick_type($arg{major_tick_mark},'outside');
 
 
     return $axis;
@@ -2164,10 +2226,11 @@ sub _get_display_units {
 #
 sub _get_tick_type {
 
-    my $self      = shift;
-    my $tick_type = shift;
+    my $self              = shift;
+    my $tick_type         = shift;
+    my $tick_type_default = shift;
 
-    return if !$tick_type;
+    return if !$tick_type && ( $self->{_excel_version} == 2007 || !$tick_type_default);
 
     my %types = (
         'outside' => 'out',
@@ -2176,8 +2239,8 @@ sub _get_tick_type {
         'cross'   => 'cross',
     );
 
-    if ( exists $types{$tick_type} ) {
-        $tick_type = $types{$tick_type};
+    if ( exists $types{$tick_type || $tick_type_default } ) {
+        $tick_type = $types{$tick_type || $tick_type_default };
     }
     else {
         warn "Unknown tick_type type '$tick_type'\n";
@@ -2414,6 +2477,47 @@ sub _write_lang {
 
 ##############################################################################
 #
+# _write_rounded_corners()
+#
+# Write the <c:roundedCorners> element.
+#
+sub _write_rounded_corners {
+
+    my $self = shift;
+
+    my $roundedCorners = $self->{_rounded_corners} ? 1 : 0;
+
+    return if $roundedCorners == 0 && $self->{_excel_version} == 2007;
+
+    my @attributes = ( 'val' => $roundedCorners );
+
+    $self->xml_empty_tag( 'c:roundedCorners', @attributes );
+}
+
+##############################################################################
+#
+# _write_alternate_content()
+#
+# Write the <mc:AlternateContent> element.
+#
+sub _write_alternate_content {
+
+    my $self     = shift;
+    my $style_id = $self->{_style_id};
+
+    $self->xml_start_tag( 'mc:AlternateContent', 'xmlns:mc' => 'http://schemas.openxmlformats.org/markup-compatibility/2006' );
+    $self->xml_start_tag( 'mc:Choice', 'xmlns:c14' => 'http://schemas.microsoft.com/office/drawing/2007/8/2/chart', 'Requires' => 'c14' );
+    $self->xml_empty_tag( 'c14:style', 'val' => 100+$style_id );
+    $self->xml_end_tag( 'mc:Choice' );
+    $self->xml_start_tag( 'mc:Fallback' );
+    $self->xml_empty_tag( 'c:style', 'val' => $style_id );
+    $self->xml_end_tag( 'mc:Fallback' );
+    $self->xml_end_tag( 'mc:AlternateContent' );
+}
+
+
+##############################################################################
+#
 # _write_style()
 #
 # Write the <c:style> element.
@@ -2423,12 +2527,16 @@ sub _write_style {
     my $self     = shift;
     my $style_id = $self->{_style_id};
 
-    # Don't write an element for the default style, 2.
-    return if $style_id == 2;
+    if ( $self->{_excel_version} > 2007 ) {
+        $self->_write_alternate_content();
+    } else {
+        # Don't write an element for the default style, 2.
+        return if $style_id == 2;
 
-    my @attributes = ( 'val' => $style_id );
+        my @attributes = ( 'val' => $style_id );
 
-    $self->xml_empty_tag( 'c:style', @attributes );
+        $self->xml_empty_tag( 'c:style', @attributes );
+    }
 }
 
 
@@ -2446,12 +2554,13 @@ sub _write_chart {
 
     # Write the chart title elements.
 
-    if ( $self->{_title_none} ) {
+    if ( $self->{_title_none}  ) {
 
         # Turn off the title.
-        $self->_write_auto_title_deleted();
+        $self->_write_auto_title_deleted( 1 );
     }
     else {
+        $self->_write_auto_title_deleted( 0 ) if $self->{_excel_version} > 2007;
         my $title;
         if ( $title = $self->{_title_formula} ) {
             $self->_write_title_formula(
@@ -2488,7 +2597,30 @@ sub _write_chart {
     # Write the c:dispBlanksAs element.
     $self->_write_disp_blanks_as();
 
+    # Write the c:showDLblsOverMax element.
+    $self->_write_show_dlbls_over_max();
+
     $self->xml_end_tag( 'c:chart' );
+}
+
+
+##############################################################################
+#
+# _write_disp_blanks_as()
+#
+# Write the <c:dispBlanksAs> element.
+#
+sub _write_show_dlbls_over_max {
+
+    my $self = shift;
+    my $val  = $self->{_show_dlbls_over_max};
+
+    # Ignore the default value.
+    return if !$val && $self->{_excel_version} == 2007;
+
+    my @attributes = ( 'val' => $val ? 1 : 0);
+
+    $self->xml_empty_tag( 'c:showDLblsOverMax', @attributes );
 }
 
 
@@ -2504,7 +2636,7 @@ sub _write_disp_blanks_as {
     my $val  = $self->{_show_blanks};
 
     # Ignore the default value.
-    return if $val eq 'gap';
+    return if $val eq 'gap' && $self->{_excel_version} == 2007;
 
     my @attributes = ( 'val' => $val );
 
@@ -2521,7 +2653,7 @@ sub _write_disp_blanks_as {
 sub _write_plot_area {
 
     my $self = shift;
-    my $second_chart = $self->{_combined};
+    my $second_charts = $self->{_combined};
 
     $self->xml_start_tag( 'c:plotArea' );
 
@@ -2534,25 +2666,26 @@ sub _write_plot_area {
 
 
     # Configure a combined chart if present.
-    if ( $second_chart ) {
+    if ( $second_charts && @$second_charts ) {
+        foreach my $second_chart (@$second_charts) {
+            # Secondary axis has unique id otherwise use same as primary.
+            if ( $second_chart->{_is_secondary} ) {
+                $second_chart->{_id} = 1000 + $self->{_id};
+            }
+            else {
+                $second_chart->{_id} = $self->{_id};
+            }
 
-        # Secondary axis has unique id otherwise use same as primary.
-        if ( $second_chart->{_is_secondary} ) {
-            $second_chart->{_id} = 1000 + $self->{_id};
+            # Shart the same filehandle for writing.
+            $second_chart->{_fh} = $self->{_fh};
+
+            # Share series index with primary chart.
+            $second_chart->{_series_index_ref} = $self->{_series_index_ref};
+
+            # Write the subclass chart type elements for combined chart.
+            $second_chart->_write_chart_type( primary_axes => 1 );
+            $second_chart->_write_chart_type( primary_axes => 0 );
         }
-        else {
-            $second_chart->{_id} = $self->{_id};
-        }
-
-        # Shart the same filehandle for writing.
-        $second_chart->{_fh} = $self->{_fh};
-
-        # Share series index with primary chart.
-        $second_chart->{_series_index} = $self->{_series_index};
-
-        # Write the subclass chart type elements for combined chart.
-        $second_chart->_write_chart_type( primary_axes => 1 );
-        $second_chart->_write_chart_type( primary_axes => 0 );
     }
 
     # Write the category and value elements for the primary axes.
@@ -2581,15 +2714,16 @@ sub _write_plot_area {
     $self->_write_val_axis( @args );
 
     # Write the secondary axis for the secondary chart.
-    if ( $second_chart && $second_chart->{_is_secondary} ) {
-
-        @args = (
-             x_axis   => $second_chart->{_x2_axis},
-             y_axis   => $second_chart->{_y2_axis},
-             axis_ids => $second_chart->{_axis2_ids}
-            );
-
-        $second_chart->_write_val_axis( @args );
+    if ( $second_charts && @$second_charts ) {
+        foreach my $second_chart (@$second_charts) {
+            next unless $second_chart->{_is_secondary};
+            @args = (
+                 x_axis   => $second_chart->{_x2_axis},
+                 y_axis   => $second_chart->{_y2_axis},
+                 axis_ids => $second_chart->{_axis2_ids}
+                );
+            $second_chart->_write_val_axis( @args );
+        }
     }
 
 
@@ -2723,7 +2857,7 @@ sub _write_ser {
 
     my $self   = shift;
     my $series = shift;
-    my $index  = $self->{_series_index}++;
+    my $index  = ${$self->{_series_index_ref}}++;
 
     $self->xml_start_tag( 'c:ser' );
 
@@ -2756,6 +2890,11 @@ sub _write_ser {
 
     # Write the c:errBars element.
     $self->_write_error_bars( $series->{_error_bars} );
+
+    # Write the c:explosion element.
+    if ( $self->{_explosion_allowed} ) {
+        $self->_write_explosion( $series->{_explosion} );
+    }
 
     # Write the c:cat element.
     $self->_write_cat( $series );
@@ -2878,6 +3017,25 @@ sub _write_cat {
 
 
     $self->xml_end_tag( 'c:cat' );
+}
+
+
+##############################################################################
+#
+# _write_explosion()
+#
+# Write the <c:explosion> element.
+#
+sub _write_explosion {
+
+    my $self = shift;
+    my $val  = shift;
+
+    return if !$val && $self->{_excel_version} == 2007;
+
+    my @attributes = ( 'val' => $val || 0 );
+
+    $self->xml_empty_tag( 'c:explosion', @attributes );
 }
 
 
@@ -3110,7 +3268,7 @@ sub _write_cat_axis {
     # Write the c:scaling element.
     $self->_write_scaling( $x_axis->{_reverse} );
 
-    $self->_write_delete( 1 ) unless $x_axis->{_visible};
+    $self->_write_delete( !$x_axis->{_visible} ) if !$x_axis->{_visible} || $self->{_excel_version} > 2007;
 
     # Write the c:axPos element.
     $self->_write_axis_pos( $position, $y_axis->{_reverse} );
@@ -3225,7 +3383,7 @@ sub _write_val_axis {
         $y_axis->{_max},     $y_axis->{_log_base}
     );
 
-    $self->_write_delete( 1 ) unless $y_axis->{_visible};
+    $self->_write_delete( !$y_axis->{_visible} ) if !$y_axis->{_visible} || $self->{_excel_version} > 2007;
 
     # Write the c:axPos element.
     $self->_write_axis_pos( $position, $x_axis->{_reverse} );
@@ -3331,7 +3489,7 @@ sub _write_cat_val_axis {
         $x_axis->{_max},     $x_axis->{_log_base}
     );
 
-    $self->_write_delete( 1 ) unless $x_axis->{_visible};
+    $self->_write_delete( !$x_axis->{_visible} ) if !$x_axis->{_visible} || $self->{_excel_version} > 2007;
 
     # Write the c:axPos element.
     $self->_write_axis_pos( $position, $y_axis->{_reverse} );
@@ -3436,7 +3594,7 @@ sub _write_date_axis {
         $x_axis->{_max},     $x_axis->{_log_base}
     );
 
-    $self->_write_delete( 1 ) unless $x_axis->{_visible};
+    $self->_write_delete( !$x_axis->{_visible} ) if !$x_axis->{_visible} || $self->{_excel_version} > 2007;
 
     # Write the c:axPos element.
     $self->_write_axis_pos( $position, $y_axis->{_reverse} );
@@ -4162,7 +4320,7 @@ sub _write_legend {
     $self->_write_layout( $legend->{_layout}, 'legend' );
 
     # Write the c:overlay element.
-    $self->_write_overlay() if $overlay;
+    $self->_write_overlay($overlay) if $overlay || $self->{_excel_version} > 2007;
 
     # Write the c:spPr element.
     $self->_write_sp_pr( $legend );
@@ -4225,9 +4383,9 @@ sub _write_legend_entry {
 sub _write_overlay {
 
     my $self = shift;
-    my $val  = 1;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => $val );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:overlay', @attributes );
 }
@@ -4275,6 +4433,37 @@ sub _write_print_settings {
     $self->_write_page_setup();
 
     $self->xml_end_tag( 'c:printSettings' );
+}
+
+
+##############################################################################
+#
+# _write_external_data()
+#
+# Write the <c:printSettings> element.
+# To embed an XLSX chart in WORD, you need to add a link between chart and xlsx file
+#
+sub _write_external_data { 
+
+    my $self     = shift;
+
+    my $externalDataId = $self->{_external_data_id};
+
+    return unless defined $externalDataId;
+
+    my @attributes = ( 'r:id' => $externalDataId );
+
+    if ( $self->{_excel_version} > 2007 ) {
+
+        $self->xml_start_tag( 'c:externalData', @attributes );
+        $self->xml_empty_tag( 'c:autoUpdate', val => 0 );
+        $self->xml_end_tag( 'c:externalData' );
+
+    } else {
+
+        $self->xml_empty_tag( 'c:externalData', @attributes );
+
+    }
 }
 
 
@@ -4344,8 +4533,9 @@ sub _write_page_setup {
 sub _write_auto_title_deleted {
 
     my $self = shift;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => 1 );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:autoTitleDeleted', @attributes );
 }
@@ -4375,7 +4565,7 @@ sub _write_title_rich {
     $self->_write_layout( $layout, 'text' );
 
     # Write the c:overlay element.
-    $self->_write_overlay() if $overlay;
+    $self->_write_overlay($overlay) if $overlay || $self->{_excel_version} > 2007;
 
     $self->xml_end_tag( 'c:title' );
 }
@@ -4406,7 +4596,7 @@ sub _write_title_formula {
     $self->_write_layout( $layout, 'text' );
 
     # Write the c:overlay element.
-    $self->_write_overlay() if $overlay;
+    $self->_write_overlay($overlay) if $overlay || $self->{_excel_version} > 2007;
 
     # Write the c:txPr element.
     $self->_write_tx_pr( $font, $is_y_axis );
@@ -5440,9 +5630,12 @@ sub _write_overlap {
 #
 sub _write_num_cache {
 
-    my $self  = shift;
-    my $data  = shift;
-    my $count = 0;
+    my $self        = shift;
+    my $data        = shift;
+    my $count       = 0;
+    my $format_code = $self->{_is_secondary} ? $self->{_x2_axis}{_num_format} : $self->{_x_axis}{_num_format};
+
+    $format_code = 'General' if $self->{_excel_version} == 2007;
 
     if (defined $data) {
         $count = @$data;
@@ -5451,7 +5644,7 @@ sub _write_num_cache {
     $self->xml_start_tag( 'c:numCache' );
 
     # Write the c:formatCode element.
-    $self->_write_format_code( 'General' );
+    $self->_write_format_code( $format_code );
 
     # Write the c:ptCount element.
     $self->_write_pt_count( $count );
@@ -5675,25 +5868,25 @@ sub _write_d_lbls {
     $self->_write_d_lbl_pos( $labels->{position} ) if $labels->{position};
 
     # Write the c:showLegendKey element.
-    $self->_write_show_legend_key() if $labels->{legend_key};
+    $self->_write_show_legend_key($labels->{legend_key}) if $labels->{legend_key} || $self->{_excel_version} > 2007;
 
     # Write the c:showVal element.
-    $self->_write_show_val() if $labels->{value};
+    $self->_write_show_val($labels->{value}) if $labels->{value} || $self->{_excel_version} > 2007;
 
     # Write the c:showCatName element.
-    $self->_write_show_cat_name() if $labels->{category};
+    $self->_write_show_cat_name($labels->{category}) if $labels->{category} || $self->{_excel_version} > 2007;
 
     # Write the c:showSerName element.
-    $self->_write_show_ser_name() if $labels->{series_name};
+    $self->_write_show_ser_name($labels->{series_name}) if $labels->{series_name} || $self->{_excel_version} > 2007;
 
     # Write the c:showPercent element.
-    $self->_write_show_percent() if $labels->{percentage};
+    $self->_write_show_percent($labels->{percentage}) if $labels->{percentage} || $self->{_excel_version} > 2007;
 
     # Write the c:separator element.
     $self->_write_separator($labels->{separator}) if $labels->{separator};
 
     # Write the c:showLeaderLines element.
-    $self->_write_show_leader_lines() if $labels->{leader_lines};
+    $self->_write_show_leader_lines($labels->{leader_lines}) if $labels->{leader_lines} || $self->{_excel_version} > 2007;
 
     $self->xml_end_tag( 'c:dLbls' );
 }
@@ -5725,28 +5918,31 @@ sub _write_custom_labels {
             $self->_write_delete( 1 );
         }
         elsif ( defined $label->{formula} ) {
+            $self->_write_delete( 0 ) if $self->{_excel_version} > 2007;
             $self->_write_custom_label_formula( $label );
 
             if ( $parent->{position} ) {
                 $self->_write_d_lbl_pos( $parent->{position} );
             }
 
-            $self->_write_show_val()      if $parent->{value};
-            $self->_write_show_cat_name() if $parent->{category};
-            $self->_write_show_ser_name() if $parent->{series_name};
+            $self->_write_show_val($parent->{value})      if $parent->{value} || $self->{_excel_version} > 2007;
+            $self->_write_show_cat_name($parent->{category}) if $parent->{category} || $self->{_excel_version} > 2007;
+            $self->_write_show_ser_name($parent->{series_name}) if $parent->{series_name} || $self->{_excel_version} > 2007;
         }
         elsif ( defined $label->{value} ) {
+            $self->_write_delete( 0 ) if $self->{_excel_version} > 2007;
             $self->_write_custom_label_str( $label );
 
             if ( $parent->{position} ) {
                 $self->_write_d_lbl_pos( $parent->{position} );
             }
 
-            $self->_write_show_val()      if $parent->{value};
-            $self->_write_show_cat_name() if $parent->{category};
-            $self->_write_show_ser_name() if $parent->{series_name};
+            $self->_write_show_val($parent->{value})      if $parent->{value} || $self->{_excel_version} > 2007;
+            $self->_write_show_cat_name($parent->{category}) if $parent->{category} || $self->{_excel_version} > 2007;
+            $self->_write_show_ser_name($parent->{series_name}) if $parent->{series_name} || $self->{_excel_version} > 2007;
         }
         else {
+            $self->_write_delete( 0 ) if $self->{_excel_version} > 2007;
             $self->_write_custom_label_format_only( $label );
         }
 
@@ -5854,9 +6050,9 @@ sub _write_custom_label_format_only {
 sub _write_show_legend_key {
 
     my $self = shift;
-    my $val  = 1;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => $val );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showLegendKey', @attributes );
 }
@@ -5870,9 +6066,9 @@ sub _write_show_legend_key {
 sub _write_show_val {
 
     my $self = shift;
-    my $val  = 1;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => $val );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showVal', @attributes );
 }
@@ -5887,9 +6083,9 @@ sub _write_show_val {
 sub _write_show_cat_name {
 
     my $self = shift;
-    my $val  = 1;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => $val );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showCatName', @attributes );
 }
@@ -5904,9 +6100,9 @@ sub _write_show_cat_name {
 sub _write_show_ser_name {
 
     my $self = shift;
-    my $val  = 1;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => $val );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showSerName', @attributes );
 }
@@ -5921,9 +6117,9 @@ sub _write_show_ser_name {
 sub _write_show_percent {
 
     my $self = shift;
-    my $val  = 1;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => $val );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showPercent', @attributes );
 }
@@ -5951,9 +6147,9 @@ sub _write_separator {
 sub _write_show_leader_lines {
 
     my $self = shift;
-    my $val  = 1;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => $val );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showLeaderLines', @attributes );
 }
@@ -5987,7 +6183,7 @@ sub _write_delete {
     my $self = shift;
     my $val  = shift;
 
-    my @attributes = ( 'val' => $val );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:delete', @attributes );
 }
@@ -6003,9 +6199,9 @@ sub _write_c_invert_if_negative {
 
     my $self   = shift;
     my $invert = shift;
-    my $val    = 1;
+    my $val    = $invert ? 1 : 0;
 
-    return unless $invert;
+    return if ! $invert && $self->{_excel_version} == 2007;
 
     my @attributes = ( 'val' => $val );
 
@@ -6069,29 +6265,17 @@ sub _write_d_table {
 
     $self->xml_start_tag( 'c:dTable' );
 
-    if ( $table->{_horizontal} ) {
+    # Write the c:showHorzBorder element.
+    $self->_write_show_horz_border( $table->{_horizontal} ) if $table->{_horizontal} || $self->{_excel_version} > 2007;
 
-        # Write the c:showHorzBorder element.
-        $self->_write_show_horz_border();
-    }
+    # Write the c:showVertBorder element.
+    $self->_write_show_vert_border( $table->{_vertical} ) if $table->{_vertical} || $self->{_excel_version} > 2007;
 
-    if ( $table->{_vertical} ) {
+    # Write the c:showOutline element.
+    $self->_write_show_outline($table->{_outline}) if $table->{_outline} || $self->{_excel_version} > 2007;
 
-        # Write the c:showVertBorder element.
-        $self->_write_show_vert_border();
-    }
-
-    if ( $table->{_outline} ) {
-
-        # Write the c:showOutline element.
-        $self->_write_show_outline();
-    }
-
-    if ( $table->{_show_keys} ) {
-
-        # Write the c:showKeys element.
-        $self->_write_show_keys();
-    }
+    # Write the c:showKeys element.
+    $self->_write_show_keys($table->{_show_keys}) if $table->{_show_keys} || $self->{_excel_version} > 2007;
 
     if ( $table->{_font} ) {
         # Write the table font.
@@ -6111,8 +6295,9 @@ sub _write_d_table {
 sub _write_show_horz_border {
 
     my $self = shift;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => 1 );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showHorzBorder', @attributes );
 }
@@ -6126,8 +6311,9 @@ sub _write_show_horz_border {
 sub _write_show_vert_border {
 
     my $self = shift;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => 1 );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showVertBorder', @attributes );
 }
@@ -6142,8 +6328,9 @@ sub _write_show_vert_border {
 sub _write_show_outline {
 
     my $self = shift;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => 1 );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showOutline', @attributes );
 }
@@ -6158,8 +6345,9 @@ sub _write_show_outline {
 sub _write_show_keys {
 
     my $self = shift;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => 1 );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:showKeys', @attributes );
 }
@@ -6214,11 +6402,8 @@ sub _write_err_bars {
     # Write the c:errValType element.
     $self->_write_err_val_type( $error_bars->{_type} );
 
-    if ( !$error_bars->{_endcap} ) {
-
-        # Write the c:noEndCap element.
-        $self->_write_no_end_cap();
-    }
+    # Write the c:noEndCap element.
+    $self->_write_no_end_cap(!$error_bars->{_endcap}) if !$error_bars->{_endcap} || $self->{_excel_version} > 2007;
 
     if ( $error_bars->{_type} eq 'stdErr' ) {
 
@@ -6301,8 +6486,9 @@ sub _write_err_val_type {
 sub _write_no_end_cap {
 
     my $self = shift;
+    my $val  = shift;
 
-    my @attributes = ( 'val' => 1 );
+    my @attributes = ( 'val' => $val ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:noEndCap', @attributes );
 }
@@ -6522,9 +6708,9 @@ sub _write_c_smooth {
     my $self    = shift;
     my $smooth  = shift;
 
-    return unless $smooth;
+    return if !$smooth && $self->{_excel_version} == 2007;
 
-    my @attributes = ( 'val' => 1 );
+    my @attributes = ( 'val' => $smooth ? 1 : 0 );
 
     $self->xml_empty_tag( 'c:smooth', @attributes );
 }
@@ -8390,7 +8576,7 @@ The following properties can be set for C<line> formats in a chart.
     transparency
 
 
-The C<none> property is used to turn the C<line> off (it is always on by default except in Scatter charts). This is useful if you wish to plot a series with markers but without a line.
+The C<none> property is uses to turn the C<line> off (it is always on by default except in Scatter charts). This is useful if you wish to plot a series with markers but without a line.
 
     $chart->add_series(
         values     => '=Sheet1!$B$1:$B$5',

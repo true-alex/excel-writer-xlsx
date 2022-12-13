@@ -20,7 +20,7 @@ use Carp;
 use Excel::Writer::XLSX::Package::XMLwriter;
 
 our @ISA     = qw(Excel::Writer::XLSX::Package::XMLwriter);
-our $VERSION = '1.09';
+our $VERSION = '1.10';
 
 
 ###############################################################################
@@ -147,6 +147,9 @@ sub _write_table {
         push @attributes, ( 'totalsRowShown' => 0 );
     }
 
+    if ( defined $self->{_properties}{_format} ) {
+        push @attributes, ( tableBorderDxfId => $self->{_properties}{_format} );
+    }
 
     $self->xml_start_tag( 'table', @attributes );
 }

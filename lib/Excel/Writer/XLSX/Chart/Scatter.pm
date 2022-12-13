@@ -22,7 +22,7 @@ use Carp;
 use Excel::Writer::XLSX::Chart;
 
 our @ISA     = qw(Excel::Writer::XLSX::Chart);
-our $VERSION = '1.09';
+our $VERSION = '1.10';
 
 
 ###############################################################################
@@ -170,7 +170,7 @@ sub _write_ser {
 
     my $self   = shift;
     my $series = shift;
-    my $index  = $self->{_series_index}++;
+    my $index  = ${$self->{_series_index_ref}}++;
 
     $self->xml_start_tag( 'c:ser' );
 

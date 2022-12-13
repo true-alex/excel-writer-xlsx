@@ -22,7 +22,7 @@ use Carp;
 use Excel::Writer::XLSX::Chart;
 
 our @ISA     = qw(Excel::Writer::XLSX::Chart);
-our $VERSION = '1.09';
+our $VERSION = '1.10';
 
 
 ###############################################################################
@@ -37,6 +37,7 @@ sub new {
 
     $self->{_vary_data_color} = 1;
     $self->{_rotation}        = 0;
+    $self->{_explosion_allowed} = 1;
 
     # Set the available data label positions for this chart type.
     $self->{_label_position_default} = 'best_fit';
@@ -70,6 +71,28 @@ sub set_rotation {
     }
     else {
         carp "Chart rotation $rotation outside range: 0 <= rotation <= 360";
+    }
+}
+
+
+###############################################################################
+#
+# set_explosion()
+#
+# Set the Pie/Doughnut chart explosion: pushing chart elements apart by a specified distance.
+#
+sub set_explosion {
+
+    my $self     = shift;
+    my $explosion = shift;
+
+    return if !defined $explosion;
+
+    if ( $explosion >= 0 && $explosion <= 400 ) {
+        $self->{_explosion} = $explosion;
+    }
+    else {
+        carp "Chart explosion $explosion outside range: 0 <= explosion <= 400";
     }
 }
 
@@ -127,7 +150,7 @@ sub _write_pie_chart {
 sub _write_plot_area {
 
     my $self = shift;
-    my $second_chart = $self->{_combined};
+    my $second_charts = $self->{_combined};
 
     $self->xml_start_tag( 'c:plotArea' );
 
@@ -138,24 +161,26 @@ sub _write_plot_area {
     $self->_write_chart_type();
 
     # Configure a combined chart if present.
-    if ( $second_chart ) {
+    if ( $second_charts && @$second_charts ) {
+        foreach my $second_chart ( @$second_charts) {
 
-        # Secondary axis has unique id otherwise use same as primary.
-        if ( $second_chart->{_is_secondary} ) {
-            $second_chart->{_id} = 1000 + $self->{_id};
+            # Secondary axis has unique id otherwise use same as primary.
+            if ( $second_chart->{_is_secondary} ) {
+                $second_chart->{_id} = 1000 + $self->{_id};
+            }
+            else {
+                $second_chart->{_id} = $self->{_id};
+            }
+
+            # Shart the same filehandle for writing.
+            $second_chart->{_fh} = $self->{_fh};
+
+            # Share series index with primary chart.
+            $second_chart->{_series_index_ref} = $self->{_series_index_ref};
+
+            # Write the subclass chart type elements for combined chart.
+            $second_chart->_write_chart_type();
         }
-        else {
-            $second_chart->{_id} = $self->{_id};
-        }
-
-        # Shart the same filehandle for writing.
-        $second_chart->{_fh} = $self->{_fh};
-
-        # Share series index with primary chart.
-        $second_chart->{_series_index} = $self->{_series_index};
-
-        # Write the subclass chart type elements for combined chart.
-        $second_chart->_write_chart_type();
     }
 
     # Write the c:spPr element for the plotarea formatting.
@@ -221,7 +246,7 @@ sub _write_legend {
     $self->_write_layout( $legend->{_layout}, 'legend' );
 
     # Write the c:overlay element.
-    $self->_write_overlay() if $overlay;
+    $self->_write_overlay($overlay) if $overlay || $self->{_excel_version} > 2007;
 
     # Write the c:spPr element.
     $self->_write_sp_pr( $legend );
@@ -344,6 +369,23 @@ sub _write_first_slice_ang {
     $self->xml_empty_tag( 'c:firstSliceAng', @attributes );
 }
 
+
+##############################################################################
+#
+# Owerride base method add_series()
+#
+# Overridden to add `explosion` option
+#
+sub add_series {
+    my $self = shift;
+    my %args = @_;
+
+    $self->SUPER::add_series(@_);
+
+    if(exists $args{explosion}) {
+        $self->{_series}[-1]{_explosion} = $args{explosion};    # add explosion attribute to last-added series
+    }
+}
 1;
 
 

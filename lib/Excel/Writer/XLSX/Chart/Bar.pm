@@ -22,7 +22,7 @@ use Carp;
 use Excel::Writer::XLSX::Chart;
 
 our @ISA     = qw(Excel::Writer::XLSX::Chart);
-our $VERSION = '1.09';
+our $VERSION = '1.10';
 
 
 ###############################################################################
@@ -84,7 +84,7 @@ sub combine {
         return;
     }
 
-    $self->{_combined} = $chart;
+    push @{$self->{_combined}}, $chart;
 }
 
 

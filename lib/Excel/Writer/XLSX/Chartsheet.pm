@@ -20,7 +20,7 @@ use Exporter;
 use Excel::Writer::XLSX::Worksheet;
 
 our @ISA     = qw(Excel::Writer::XLSX::Worksheet);
-our $VERSION = '1.09';
+our $VERSION = '1.10';
 
 
 ###############################################################################
@@ -152,24 +152,27 @@ sub protect {
 #
 ###############################################################################
 
-sub add_series         { return shift->{_chart}->add_series( @_ ) }
-sub combine            { return shift->{_chart}->combine( @_ ) }
-sub set_x_axis         { return shift->{_chart}->set_x_axis( @_ ) }
-sub set_y_axis         { return shift->{_chart}->set_y_axis( @_ ) }
-sub set_x2_axis        { return shift->{_chart}->set_x2_axis( @_ ) }
-sub set_y2_axis        { return shift->{_chart}->set_y2_axis( @_ ) }
-sub set_title          { return shift->{_chart}->set_title( @_ ) }
-sub set_legend         { return shift->{_chart}->set_legend( @_ ) }
-sub set_plotarea       { return shift->{_chart}->set_plotarea( @_ ) }
-sub set_chartarea      { return shift->{_chart}->set_chartarea( @_ ) }
-sub set_style          { return shift->{_chart}->set_style( @_ ) }
-sub show_blanks_as     { return shift->{_chart}->show_blanks_as( @_ ) }
-sub show_hidden_data   { return shift->{_chart}->show_hidden_data( @_ ) }
-sub set_size           { return shift->{_chart}->set_size( @_ ) }
-sub set_table          { return shift->{_chart}->set_table( @_ ) }
-sub set_up_down_bars   { return shift->{_chart}->set_up_down_bars( @_ ) }
-sub set_drop_lines     { return shift->{_chart}->set_drop_lines( @_ ) }
-sub set_high_low_lines { return shift->{_chart}->high_low_lines( @_ ) }
+sub add_series           { return shift->{_chart}->add_series( @_ ) }
+sub combine              { return shift->{_chart}->combine( @_ ) }
+sub set_x_axis           { return shift->{_chart}->set_x_axis( @_ ) }
+sub set_y_axis           { return shift->{_chart}->set_y_axis( @_ ) }
+sub set_x2_axis          { return shift->{_chart}->set_x2_axis( @_ ) }
+sub set_y2_axis          { return shift->{_chart}->set_y2_axis( @_ ) }
+sub set_title            { return shift->{_chart}->set_title( @_ ) }
+sub set_legend           { return shift->{_chart}->set_legend( @_ ) }
+sub set_plotarea         { return shift->{_chart}->set_plotarea( @_ ) }
+sub set_chartarea        { return shift->{_chart}->set_chartarea( @_ ) }
+sub set_style            { return shift->{_chart}->set_style( @_ ) }
+sub show_blanks_as       { return shift->{_chart}->show_blanks_as( @_ ) }
+sub show_hidden_data     { return shift->{_chart}->show_hidden_data( @_ ) }
+sub set_size             { return shift->{_chart}->set_size( @_ ) }
+sub set_table            { return shift->{_chart}->set_table( @_ ) }
+sub set_up_down_bars     { return shift->{_chart}->set_up_down_bars( @_ ) }
+sub set_drop_lines       { return shift->{_chart}->set_drop_lines( @_ ) }
+sub set_high_low_lines   { return shift->{_chart}->set_high_low_lines( @_ ) }
+sub set_external_data_id { return shift->{_chart}->set_external_data_id( @_ ) }
+sub set_rounded_corners  { return shift->{_chart}->set_rounded_corners( @_ ) }
+sub show_dlbls_over_max  { return shift->{_chart}->show_dlbls_over_max( @_ ) }
 
 
 
