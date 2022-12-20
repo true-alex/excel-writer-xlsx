@@ -4829,7 +4829,7 @@ sub _write_a_p_formula {
     $self->_write_a_p_pr_formula( $font );
 
     # Write the a:endParaRPr element.
-    $self->_write_a_end_para_rpr();
+    $self->_write_a_end_para_rpr( $self->{_lang} );
 
     $self->xml_end_tag( 'a:p' );
 }
@@ -4921,7 +4921,9 @@ sub _write_a_def_rpr {
 sub _write_a_end_para_rpr {
 
     my $self = shift;
-    my $lang = 'en-US';
+    my $lang  = shift;
+
+    $lang ||= 'en-US';
 
     my @attributes = ( 'lang' => $lang );
 
@@ -4964,7 +4966,7 @@ sub _write_a_r_pr {
     my $self      = shift;
     my $font      = shift;
     my $has_color = 0;
-    my $lang      = 'en-US';
+    my $lang      = $self->{_lang} || 'en-US';
 
     my @style_attributes = $self->_get_font_style_attributes( $font );
     my @latin_attributes = $self->_get_font_latin_attributes( $font );
@@ -5948,9 +5950,11 @@ sub _write_custom_labels {
                 $self->_write_d_lbl_pos( $parent->{position} );
             }
 
+            $self->_write_show_legend_key($parent->{legend_key}) if $parent->{legend_key} || $self->{_excel_version} > 2007;
             $self->_write_show_val($parent->{value})      if $parent->{value} || $self->{_excel_version} > 2007;
             $self->_write_show_cat_name($parent->{category}) if $parent->{category} || $self->{_excel_version} > 2007;
             $self->_write_show_ser_name($parent->{series_name}) if $parent->{series_name} || $self->{_excel_version} > 2007;
+            $self->_write_show_percent($parent->{percentage}) if $parent->{percentage} || $self->{_excel_version} > 2007;
         }
         elsif ( defined $label->{value} ) {
             $self->_write_delete( 0 ) if $self->{_excel_version} > 2007;
@@ -5960,12 +5964,19 @@ sub _write_custom_labels {
                 $self->_write_d_lbl_pos( $parent->{position} );
             }
 
+            $self->_write_show_legend_key($parent->{legend_key}) if $parent->{legend_key} || $self->{_excel_version} > 2007;
             $self->_write_show_val($parent->{value})      if $parent->{value} || $self->{_excel_version} > 2007;
             $self->_write_show_cat_name($parent->{category}) if $parent->{category} || $self->{_excel_version} > 2007;
             $self->_write_show_ser_name($parent->{series_name}) if $parent->{series_name} || $self->{_excel_version} > 2007;
+            $self->_write_show_percent($parent->{percentage}) if $parent->{percentage} || $self->{_excel_version} > 2007;
         }
         else {
             $self->_write_delete( 0 ) if $self->{_excel_version} > 2007;
+            $self->_write_show_legend_key($parent->{legend_key}) if $self->{_excel_version} > 2007;
+            $self->_write_show_val($parent->{value})      if $self->{_excel_version} > 2007;
+            $self->_write_show_cat_name($parent->{category}) if $self->{_excel_version} > 2007;
+            $self->_write_show_ser_name($parent->{series_name}) if $self->{_excel_version} > 2007;
+            $self->_write_show_percent($parent->{percentage}) if $self->{_excel_version} > 2007;
             $self->_write_custom_label_format_only( $label );
         }
 
