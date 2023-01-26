@@ -125,6 +125,7 @@ sub new {
 
     $self->{_excel_version}     = $arg{excel_version} || 2007;
     $self->{_lang}              = $arg{lang} || 'en-US';
+    $self->{_date_1904}         = $arg{date1904} || 0;
 
     bless $self, $class;
     $self->_set_default_properties();
@@ -146,6 +147,9 @@ sub _assemble_xml_file {
 
     # Write the c:chartSpace element.
     $self->_write_chart_space();
+
+    # Write the c:date1904 element.
+    $self->_write_date1904($self->{_date_1904}) if $self->{_excel_version} >= 2010;
 
     # Write the c:lang element.
     $self->_write_lang($self->{_lang});
@@ -2462,6 +2466,25 @@ sub _write_chart_space {
 
 ##############################################################################
 #
+# _write_date1904()
+#
+# Write the <c:date1904> element.
+#
+sub _write_date1904 {
+
+    my $self = shift;
+    my $val  = shift;
+
+    $val ||= 0;
+
+    my @attributes = ( 'val' => $val );
+
+    $self->xml_empty_tag( 'c:date1904', @attributes );
+}
+
+
+##############################################################################
+#
 # _write_lang()
 #
 # Write the <c:lang> element.
@@ -3021,7 +3044,7 @@ sub _write_cat {
         $self->{_cat_has_num_fmt} = 0;
 
         # Write the c:numRef element.
-        $self->_write_str_ref( $formula, $data, $type );
+        $self->_write_str_ref( $formula, $data, $type, 0 );
     }
     elsif ( $type eq 'multi_str') {
 
@@ -3035,7 +3058,7 @@ sub _write_cat {
         $self->{_cat_has_num_fmt} = 1;
 
         # Write the c:numRef element.
-        $self->_write_num_ref( $formula, $data, $type );
+        $self->_write_num_ref( $formula, $data, $type, 0 );
     }
 
 
@@ -3081,7 +3104,7 @@ sub _write_val {
     # Unlike Cat axes data should only be numeric.
 
     # Write the c:numRef element.
-    $self->_write_num_ref( $formula, $data, 'num' );
+    $self->_write_num_ref( $formula, $data, 'num', 1 );
 
     $self->xml_end_tag( 'c:val' );
 }
@@ -3099,6 +3122,7 @@ sub _write_num_ref {
     my $formula = shift;
     my $data    = shift;
     my $type    = shift;
+    my $is_val  = shift;
 
     $self->xml_start_tag( 'c:numRef' );
 
@@ -3108,7 +3132,7 @@ sub _write_num_ref {
     if ( $type eq 'num' ) {
 
         # Write the c:numCache element.
-        $self->_write_num_cache( $data );
+        $self->_write_num_cache( $data, $is_val );
     }
     elsif ( $type eq 'str' ) {
 
@@ -3132,6 +3156,7 @@ sub _write_str_ref {
     my $formula = shift;
     my $data    = shift;
     my $type    = shift;
+    my $is_val  = shift;
 
     $self->xml_start_tag( 'c:strRef' );
 
@@ -3141,7 +3166,7 @@ sub _write_str_ref {
     if ( $type eq 'num' ) {
 
         # Write the c:numCache element.
-        $self->_write_num_cache( $data );
+        $self->_write_num_cache( $data, $is_val );
     }
     elsif ( $type eq 'str' ) {
 
@@ -4690,7 +4715,7 @@ sub _write_tx_formula {
     $self->xml_start_tag( 'c:tx' );
 
     # Write the c:strRef element.
-    $self->_write_str_ref( $title, $data, 'str' );
+    $self->_write_str_ref( $title, $data, 'str' , 0 );
 
     $self->xml_end_tag( 'c:tx' );
 }
@@ -5657,8 +5682,9 @@ sub _write_num_cache {
 
     my $self        = shift;
     my $data        = shift;
+    my $is_val      = shift;
     my $count       = 0;
-    my $format_code = $self->{_is_secondary} ? $self->{_x2_axis}{_num_format} : $self->{_x_axis}{_num_format};
+    my $format_code = $is_val ? ($self->{_is_secondary} ? $self->{_y2_axis}{_num_format} : $self->{_y_axis}{_num_format}) : ($self->{_is_secondary} ? $self->{_x2_axis}{_num_format} : $self->{_x_axis}{_num_format});
 
     $format_code = 'General' if $self->{_excel_version} == 2007;
 
@@ -6040,7 +6066,7 @@ sub _write_custom_label_formula {
     $self->xml_start_tag( 'c:tx' );
 
     # Write the c:strRef element.
-    $self->_write_str_ref( $formula, $data, 'str' );
+    $self->_write_str_ref( $formula, $data, 'str', 1 );
 
     $self->xml_end_tag( 'c:tx' );
 
