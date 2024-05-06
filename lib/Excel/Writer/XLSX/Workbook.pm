@@ -1282,6 +1282,10 @@ sub _prepare_sst_string_data {
 
     my $self = shift;
 
+    if ( $self->{_str_array} && !defined $self->{_str_table} ) {
+        return;
+    }
+
     my @strings;
     $#strings = $self->{_str_unique} - 1;    # Pre-extend array
 
