@@ -1,10 +1,13 @@
+
 package Excel::Writer::XLSX;
 
 ###############################################################################
 #
 # Excel::Writer::XLSX - Create a new file in the Excel 2007+ XLSX format.
 #
-# Copyright 2000-2022, John McNamara, jmcnamara@cpan.org
+# Copyright 2000-2024, John McNamara, jmcnamara@cpan.org
+#
+# SPDX-License-Identifier: Artistic-1.0-Perl OR GPL-1.0-or-later
 #
 # Documentation after __END__
 #
@@ -17,7 +20,7 @@ use Exporter;
 use Excel::Writer::XLSX::Workbook;
 
 our @ISA     = qw(Excel::Writer::XLSX::Workbook Exporter);
-our $VERSION = '1.09';
+our $VERSION = '1.12';
 
 
 ###############################################################################
@@ -721,6 +724,7 @@ The following methods are available through a new worksheet:
     set_comments_author()
     add_write_handler()
     insert_image()
+    embed_image()
     insert_chart()
     insert_shape()
     insert_button()
@@ -732,6 +736,7 @@ The following methods are available through a new worksheet:
     activate()
     select()
     hide()
+    very_hidden()
     set_first_sheet()
     protect()
     unprotect_range()
@@ -1566,7 +1571,7 @@ This option is used to change the x offset, in pixels, of a comment within a cel
 
 This option is used to change the y offset, in pixels, of a comment within a cell:
 
-    $worksheet->write_comment('C3', $comment, x_offset => 30);
+    $worksheet->write_comment('C3', $comment, y_offset => 30);
 
 =item Option: font
 
@@ -1707,6 +1712,8 @@ This method can be used to insert a image into a worksheet. The image can be in 
     $worksheet2->insert_image( 'A1', '../images/perl.bmp' );
     $worksheet3->insert_image( 'A1', '.c:\images\perl.bmp' );
 
+This is the equivalent of Excel's menu option to insert an image using the option to "Place over Cells". See C<embed_image()> below for the equivalent method to "Place in Cell".
+
 The optional C<options> hash/hashref parameter can be used to set various options for the image. The defaults are:
 
     %options = (
@@ -1773,6 +1780,84 @@ The optional C<decorative> parameter is also used to help accessibility. It is u
 Note: you must call C<set_row()> or C<set_column()> before C<insert_image()> if you wish to change the default dimensions of any of the rows or columns that the image occupies. The height of a row can also change if you use a font that is larger than the default. This in turn will affect the scaling of your image. To avoid this you should explicitly set the height of the row using C<set_row()> if it contains a font size that will change the row height.
 
 BMP images must be 24 bit, true colour, bitmaps. In general it is best to avoid BMP images since they aren't compressed.
+
+
+
+=head2 embed_image( $row, $col, $filename, { %options } )
+
+This method can be used to embed an image into a worksheet. The image can be
+in PNG, JPEG, GIF or BMP format.
+
+    $worksheet1->embed_image( 'A1', 'perl.bmp' );
+    $worksheet2->embed_image( 'A1', '../images/perl.bmp' );
+    $worksheet3->embed_image( 'A1', '.c:\images\perl.bmp' );
+
+This method can be used to embed a image into a worksheet cell and have the
+image automatically scale to the width and height of the cell. The X/Y scaling
+of the image is preserved but the size of the image is adjusted to fit the
+largest possible width or height depending on the cell dimensions.
+
+This is the equivalent of Excel's menu option to insert an image using the
+option to "Place in Cell" which is only available in Excel 365 versions from
+2023 onwards. For older versions of Excel a ``#VALUE!`` error is displayed.
+
+See C<insert_image()> for the equivalent method to "Place over Cells".
+
+The optional C<options> hash/hashref parameter can be used to set various
+options for the image. The defaults are:
+
+    %options = (
+        cell_format     => format,
+        url             => undef,
+        tip             => undef,
+        description     => $filename,
+        decorative      => 0,
+    );
+
+The C<cell_format> parameters can be an standard Format to set the formatting
+of the cell behind the image.
+
+The C<url> option can be use to used to add a hyperlink to an image:
+
+    $worksheet->insert_image( 'A1', 'logo.png',
+        { url => 'https://github.com/jmcnamara' } );
+
+The supported url formats are the same as those supported by the
+C<write_url()> method and the same rules/limits apply.
+
+The C<tip> option can be use to used to add a mouseover tip to the hyperlink:
+
+    $worksheet->insert_image( 'A1', 'logo.png',
+        {
+            url => 'https://github.com/jmcnamara',
+            tip => 'GitHub'
+        }
+    );
+
+The C<description> parameter can be used to specify a description or "alt
+text" string for the image. In general this would be used to provide a text
+description of the image to help accessibility. It is an optional parameter
+and defaults to the filename of the image. It can be used as follows:
+
+    $worksheet->insert_image( 'E9', 'logo.png',
+                              {description => "This is some alternative text"} );
+
+The optional C<decorative> parameter is also used to help accessibility. It is
+used to mark the image as decorative, and thus uninformative, for automated
+screen readers. As in Excel, if this parameter is in use the C<description>
+field isn't written. It is used as follows:
+
+    $worksheet->insert_image( 'E9', 'logo.png', {decorative => 1} );
+
+Note: you must call C<set_row()> or C<set_column()> before C<insert_image()>
+if you wish to change the default dimensions of any of the rows or columns
+that the image occupies. The height of a row can also change if you use a font
+that is larger than the default. This in turn will affect the scaling of your
+image. To avoid this you should explicitly set the height of the row using
+C<set_row()> if it contains a font size that will change the row height.
+
+BMP images must be 24 bit, true colour, bitmaps. In general it is best to
+avoid BMP images since they aren't compressed.
 
 
 
@@ -2097,6 +2182,16 @@ A hidden worksheet can not be activated or selected so this method is mutually e
 
 
 
+=head2 very_hidden()
+
+The C<very_hidden()> method can be used to hide a worksheet similar to the
+C<hide()> method. The difference is that the worksheet cannot be unhidden in
+the the Excel user interface. The Excel worksheet "xlSheetVeryHidden" option
+can only be unset programmatically by VBA.
+
+
+
+
 =head2 set_first_sheet()
 
 The C<activate()> method determines which worksheet is initially selected. However, if there are a large number of worksheets the selected worksheet may not appear on the screen. To avoid this you can select which is the leftmost visible worksheet using C<set_first_sheet()>:
@@ -2130,7 +2225,7 @@ You can optionally add a password to the worksheet protection:
 
     $worksheet->protect( 'drowssap' );
 
-Passing the empty string C<''> is the same as turning on protection without a password.
+The password should be an ASCII string. Passing the empty string C<''> is the same as turning on protection without a password.
 
 Note, the worksheet level password in Excel provides very weak protection. It does not encrypt your data and is very easy to deactivate. Full workbook encryption is not supported by C<Excel::Writer::XLSX> since it requires a completely different file format and would take several man months to implement.
 
@@ -2345,8 +2440,8 @@ Excel allows up to 7 outline levels. Therefore the C<$level> parameter should be
 
 This method is the same as C<set_column()> except that C<$width> is in pixels.
 
-    $worksheet->set_column( 0, 0, 10 );    # Column A width set to 20 in character units
-    $worksheet->set_column( 1, 1, 75 );    # Column B set to the same width in pixels
+    $worksheet->set_column       ( 0, 0, 10 ); # Column A width set to 10 in character units
+    $worksheet->set_column_pixels( 1, 1, 75 ); # Column B set to the same width in pixels
 
 
 
@@ -2760,6 +2855,7 @@ The following methods are available for page set-up:
     set_landscape()
     set_portrait()
     set_page_view()
+    set_pagebreak_view()
     set_paper()
     center_horizontally()
     center_vertically()
@@ -2805,11 +2901,22 @@ This method is used to set the orientation of a worksheet's printed page to port
 
 
 
+
 =head2 set_page_view()
 
 This method is used to display the worksheet in "Page View/Layout" mode.
 
     $worksheet->set_page_view();
+
+
+
+
+=head2 set_pagebreak_view()
+
+This method is used to display the worksheet in "Page Break Preview" mode.
+
+    $worksheet->set_pagebreak_view();
+
 
 
 
@@ -4157,6 +4264,20 @@ Set the colour of the diagonal cell border:
     $format->set_diag_border( 7 );
     $format->set_diag_color( 'red' );
 
+
+
+
+=head2 set_quote_prefix()
+
+    Default state:      quote prefix is off
+    Default action:     Turn quote prefix on
+    Valid args:         0, 1
+
+Set the quote prefix property of a format to ensure a string is treated as a string after editing. This is the same as prefixing the string with a single quote in Excel. You don't need to add the quote to the string but you do need to add the format.
+
+Set the quote prefix property of the format:
+
+    $format->set_quote_prefix();  # Turn quote prefix on
 
 
 =head2 copy( $format )
@@ -6584,6 +6705,7 @@ The following list is taken from the MS XLSX extensions documentation on future 
     _xlfn.ACOTH
     _xlfn.AGGREGATE
     _xlfn.ARABIC
+    _xlfn.ARRAYTOTEXT
     _xlfn.BASE
     _xlfn.BETA.DIST
     _xlfn.BETA.INV
@@ -6603,6 +6725,7 @@ The following list is taken from the MS XLSX extensions documentation on future 
     _xlfn.CHISQ.INV.RT
     _xlfn.CHISQ.TEST
     _xlfn.COMBINA
+    _xlfn.CONCAT
     _xlfn.CONFIDENCE.NORM
     _xlfn.CONFIDENCE.T
     _xlfn.COT
@@ -6638,6 +6761,8 @@ The following list is taken from the MS XLSX extensions documentation on future 
     _xlfn.GAUSS
     _xlfn.HYPGEOM.DIST
     _xlfn.IFNA
+    _xlfn.IFS
+    _xlfn.IMAGE
     _xlfn.IMCOSH
     _xlfn.IMCOT
     _xlfn.IMCSC
@@ -6648,9 +6773,13 @@ The following list is taken from the MS XLSX extensions documentation on future 
     _xlfn.IMTAN
     _xlfn.ISFORMULA
     ISO.CEILING
+    _xlfn.ISOMITTED
     _xlfn.ISOWEEKNUM
+    _xlfn.LET
     _xlfn.LOGNORM.DIST
     _xlfn.LOGNORM.INV
+    _xlfn.MAXIFS
+    _xlfn.MINIFS
     _xlfn.MODE.MULT
     _xlfn.MODE.SNGL
     _xlfn.MUNIT
@@ -6688,13 +6817,18 @@ The following list is taken from the MS XLSX extensions documentation on future 
     _xlfn.T.INV
     _xlfn.T.INV.2T
     _xlfn.T.TEST
+    _xlfn.TEXTAFTER
+    _xlfn.TEXTBEFORE
+    _xlfn.TEXTJOIN
     _xlfn.UNICHAR
     _xlfn.UNICODE
+    _xlfn.VALUETOTEXT
     _xlfn.VAR.P
     _xlfn.VAR.S
     _xlfn.WEBSERVICE
     _xlfn.WEIBULL.DIST
     WORKDAY.INTL
+    _xlfn.XMATCH
     _xlfn.XOR
     _xlfn.Z.TEST
 
@@ -7211,6 +7345,7 @@ different features and options of the module. See L<Excel::Writer::XLSX::Example
 
     Intermediate
     ============
+    autofit.pl              Examples of simulated worksheet autofit.
     autofilter.pl           Examples of worksheet autofilters.
     array_formula.pl        Examples of how to write array formulas.
     cgi.pl                  A simple CGI program.
@@ -7240,6 +7375,8 @@ different features and options of the module. See L<Excel::Writer::XLSX::Example
     date_time.pl            Write dates and times with write_date_time().
     defined_name.pl         Example of how to create defined names.
     diag_border.pl          A simple example of diagonal cell borders.
+    dynamic_arrays.pl       Example of using new Excel 365 dynamic functions.
+    embedded_images.pl      Example of embedding imges in worksheet cells.
     filehandle.pl           Examples of working with filehandles.
     headers.pl              Examples of worksheet headers and footers.
     hide_row_col.pl         Example of hiding rows and columns.
@@ -7248,6 +7385,7 @@ different features and options of the module. See L<Excel::Writer::XLSX::Example
     hyperlink2.pl           Examples of internal and external hyperlinks.
     indent.pl               An example of cell indentation.
     ignore_errors.pl        An example of turning off worksheet cells errors/warnings.
+    lambda.pl               Example of using the Excel 365 LAMBDA() function.
     macros.pl               An example of adding macros from an existing file.
     merge1.pl               A simple example of cell merging.
     merge2.pl               A simple example of cell merging with formatting.
@@ -7287,7 +7425,6 @@ different features and options of the module. See L<Excel::Writer::XLSX::Example
     write_handler3.pl       Example of extending the write() method. Step 3.
     write_handler4.pl       Example of extending the write() method. Step 4.
     write_to_scalar.pl      Example of writing an Excel file to a Perl scalar.
-
 
     Unicode
     =======
@@ -7565,7 +7702,7 @@ In no event unless required by applicable law or agreed to in writing will any c
 
 =head1 LICENSE
 
-The Perl Artistic Licence L<http://dev.perl.org/licenses/artistic.html>.
+Either the Perl Artistic Licence L<https://dev.perl.org/licenses/artistic.html> or the GNU General Public License v1.0 or later L<https://dev.perl.org/licenses/gpl1.html>.
 
 
 
@@ -7579,6 +7716,6 @@ John McNamara jmcnamara@cpan.org
 
 =head1 COPYRIGHT
 
-Copyright MM-MMXXI, John McNamara.
+Copyright MM-MMXXIV, John McNamara.
 
 All Rights Reserved. This module is free software. It may be used, redistributed and/or modified under the same terms as Perl itself.
